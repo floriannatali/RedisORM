@@ -1,0 +1,12 @@
+{
+  "name": "sportnco/redis-orm",
+  "description": "A great ORM to manage entities stored on a redis server",
+  "minimum-stability": "stable",
+  "license": "proprietary",
+  "authors": [
+    {
+      "name": "Florian NATALI",
+      "email": "florian.natali@gmail.com"
+    }
+  ]
+}
