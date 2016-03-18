@@ -8,5 +8,15 @@
       "name": "Florian NATALI",
       "email": "florian.natali@gmail.com"
     }
-  ]
+  ],
+  "require": {
+    "php": ">=5.3.9",
+    "jms/serializer": "^1.1",
+    "predis/predis": "^1.0"
+  },
+  "autoload": {
+    "psr-4": {
+      "Sportnco\\RedisORM\\": "src"
+    }
+  }
 }
