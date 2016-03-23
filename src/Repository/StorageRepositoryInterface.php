@@ -13,6 +13,7 @@ use Sportnco\RedisORM\Entity\StorageEntity;
 use Sportnco\RedisORM\Exception\EntityAlreadyExistException;
 use Sportnco\RedisORM\Exception\EntityNotFound;
 use Sportnco\RedisORM\Exception\EntityNotFoundException;
+use Sportnco\RedisORM\Exception\InvalidArgumentException;
 
 /**
  * Repository for the storage entities
@@ -24,37 +25,39 @@ interface StorageRepositoryInterface
     /**
      * Finds an object by its primary key / identifier.
      *
-     * @param mixed $id The identifier.
+     * @param array|mixed $id The identifiern can be an array of multiple ID properties key=>value,  or just a single ID value
      *
-     * @return StorageEntity
+     * @return Object|null
      */
     public function find($id);
 
     /**
-     * Finds all objects in the repository.
-     * Warning, on a massive storage database, can return lot of results!
+     * Finds all objects
+     * Warning, on a massive storage database can return lot of results!
+     * You should use count() to check number of results and paginate with $offset and $limit parameters
      *
-     * @return StorageEntity[]
+     * entities are ordered by insertion date, not by ID !
+     *
+     * @param $limit
+     * @param $offset
+     * @return mixed
      */
-    public function findAll();
+    public function findAll($limit, $offset);
 
     /**
      * Finds objects by a set of criteria.
      *
      * Optionally sorting and limiting details can be passed. An implementation may throw
-     * an UnexpectedValueException if certain values of the sorting or limiting details are
+     * an InvalidArgumentException if certain values of the sorting or limiting details are
      * not supported.
      *
      * @param array      $criteria
-     * @param string     $sort : (default) 'ASC' | 'DESC'
-     * @param int|null   $limit
-     * @param int|null   $offset
      *
-     * @return StorageEntity[]
+     * @return Object[]
      *
-     * @throws \UnexpectedValueException
+     * @throws InvalidArgumentException
      */
-    public function findBy(array $criteria, $sort = null, $limit = null, $offset = null);
+    public function findBy(array $criteria);
 
     /**
      * Return number of objects by the set of criteria
@@ -70,10 +73,10 @@ interface StorageRepositoryInterface
      * store a new entity and return it (with his new id if not set)
      *
      * @throws EntityAlreadyExistException
-     * @param StorageEntity $storageEntity
-     * @return StorageEntity
+     * @param Object $entity
+     * @return Object
      */
-    public function create(StorageEntity $storageEntity);
+    public function insert($entity);
 
     /**
      * update an entity
@@ -81,10 +84,10 @@ interface StorageRepositoryInterface
      *
      * @throws EntityNotFoundException
      *
-     * @param StorageEntity $storageEntity
-     * @return StorageEntity
+     * @param Object $entity
+     * @return Object
      */
-    public function update(StorageEntity $storageEntity);
+    public function update($entity);
 
     /**
      * Returns the entity stored
@@ -93,21 +96,4 @@ interface StorageRepositoryInterface
      * @return boolean true if entity found and removed, false if entity not found
      */
     public function remove($id);
-
-    /**
-     * Returns the entity name of the object managed by the repository.
-     *
-     * @return string
-     */
-    public function getEntityName();
-
-    /**
-     * @return string
-     */
-    public function getEntityTableName();
-
-    /**
-     * @return array
-     */
-    public function getEntityIndexes();
 }

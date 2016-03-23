@@ -9,7 +9,7 @@
 namespace Sportnco\RedisORM\Exception;
 
 
-class EntityNotFoundException extends \Exception
+class EntityNotFoundException extends RedisORMException
 {
 
 }

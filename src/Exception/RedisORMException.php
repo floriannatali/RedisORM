@@ -2,14 +2,14 @@
 /**
  * Created by PhpStorm.
  * User: florian
- * Date: 17/03/16
- * Time: 16:00
+ * Date: 18/03/16
+ * Time: 11:20
  */
 
 namespace Sportnco\RedisORM\Exception;
 
 
-class EntityAlreadyExistException extends RedisORMException
+class RedisORMException extends \Exception
 {
 
 }

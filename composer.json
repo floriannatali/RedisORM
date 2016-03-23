@@ -12,7 +12,9 @@
   "require": {
     "php": ">=5.3.9",
     "jms/serializer": "^1.1",
-    "predis/predis": "^1.0"
+    "predis/predis": "^1.0",
+    "doctrine/common": "^2.6",
+    "doctrine/annotations": "^1.2"
   },
   "autoload": {
     "psr-4": {
