@@ -47,8 +47,10 @@ abstract class AbstractCaller
     }
 
     /**
+     * Possible method names, ordered by priority to call
+     *
      * @param $property
-     * @return array possible method name
+     * @return array
      */
     abstract function buildMethodName($property);
 }

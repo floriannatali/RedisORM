@@ -10,8 +10,12 @@ namespace Sportnco\RedisORM\MethodCaller;
 
 class GetterCaller extends AbstractCaller
 {
+    /**
+     * {@inheritDoc}
+     */
     public function buildMethodName($property)
     {
+
         $formatted = str_replace('_','', ucwords($property, '_'));
         return  [
             'get' . $formatted,

@@ -36,13 +36,14 @@ interface StorageRepositoryInterface
      * Warning, on a massive storage database can return lot of results!
      * You should use count() to check number of results and paginate with $offset and $limit parameters
      *
-     * entities are ordered by insertion date, not by ID !
      *
+     * @param $sort
      * @param $limit
      * @param $offset
+     * @param $orderBy
      * @return mixed
      */
-    public function findAll($limit, $offset);
+    public function findAll($sort, $limit, $offset, $orderBy);
 
     /**
      * Finds objects by a set of criteria.

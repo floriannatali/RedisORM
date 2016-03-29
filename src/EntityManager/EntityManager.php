@@ -8,7 +8,6 @@
 
 namespace Sportnco\RedisORM\EntityManager;
 
-use JMS\Serializer\Serializer;
 use Predis\Client;
 use Predis\Pipeline\Pipeline;
 use Sportnco\RedisORM\Exception\RedisORMException;
@@ -28,11 +27,6 @@ class EntityManager implements EntityManagerInterface
     protected $redisPipeline;
 
     /**
-     * @var Serializer
-     */
-    protected $serializer;
-
-    /**
      * @var RepositoryFactory
      */
     protected $repositoryFactory;
@@ -47,19 +41,16 @@ class EntityManager implements EntityManagerInterface
      * @param Client $redisClient
      * @param RepositoryFactory $repositoryFactory
      * @param MetadataFactory $metadataFactory
-     * @param Serializer $serializer
      */
     public function __construct(
         Client $redisClient,
         RepositoryFactory $repositoryFactory,
-        MetadataFactory $metadataFactory,
-        Serializer $serializer
+        MetadataFactory $metadataFactory
     )
     {
         $this->redisClient = $redisClient;
         $this->repositoryFactory = $repositoryFactory;
         $this->metadataFactory = $metadataFactory;
-        $this->serializer = $serializer;
     }
 
     /**
@@ -105,14 +96,6 @@ class EntityManager implements EntityManagerInterface
         }
 
         return $this->redisPipeline;
-    }
-
-    /**
-     * @return Serializer
-     */
-    public function getSerializer()
-    {
-        return $this->serializer;
     }
 
     public function initPipeline() {

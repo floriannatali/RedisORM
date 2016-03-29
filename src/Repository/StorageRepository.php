@@ -80,12 +80,12 @@ class StorageRepository implements StorageRepositoryInterface
 
     private function findByIdString($idString)
     {
-        $data = $this
+        $serializedobject = $this
             ->getRedisClient(true)
-            ->hgetall($this->storageKeyBuilder->generateKeyData($idString));
+            ->get($this->storageKeyBuilder->generateKeyData($idString));
 
-        if(count($data) > 0) {
-            return $this->entityManager->getSerializer()->fromArray($data, $this->entityMetadata->getEntityClass());
+        if(!is_null($serializedobject)) {
+            return unserialize($serializedobject);
         }
 
         return null;
@@ -93,20 +93,55 @@ class StorageRepository implements StorageRepositoryInterface
 
     public function find($id)
     {
-        if(is_array($id)) {
-            ksort($id);
-            $idString = $this->buildIdStringFromIdsPropertiesArray($id);
-        } else {
-            $idString = $this->buildIdStringFromIdsPropertiesArray([$this->entityMetadata->getIdProperty()=>$id]);
-        }
+        $idString = $this->getIdString($id);
 
         return $this->findByIdString($idString);
     }
 
-    public function findAll($limit=-1, $offset=0)
+    public function findIdsStringFromIdOrder($sort,$limit,$offset) {
+        if(strtoupper($sort)=="DESC"){
+            return $this->getRedisClient(true)->zrevrangebyscore($this->storageKeyBuilder->generateKeyIds(), '+inf','-inf', ['LIMIT'=>['COUNT'=>$limit, 'OFFSET'=>$offset]]);
+        }else{
+            return $this->getRedisClient(true)->zrangebyscore($this->storageKeyBuilder->generateKeyIds(),'-inf', '+inf', ['LIMIT'=>['COUNT'=>$limit, 'OFFSET'=>$offset]]);
+        }
+    }
+
+    protected function findIdsStringFromDateIndex($property,$sort,$limit,$offset) {
+        if(strtoupper($sort)=="DESC"){
+            return $this->getRedisClient(true)->zrevrangebyscore($this->storageKeyBuilder->generateKeyDateIndex($property), '+inf','-inf', ['LIMIT'=>['COUNT'=>$limit, 'OFFSET'=>$offset]]);
+        }else{
+            return $this->getRedisClient(true)->zrangebyscore($this->storageKeyBuilder->generateKeyDateIndex($property),'-inf', '+inf', ['LIMIT'=>['COUNT'=>$limit, 'OFFSET'=>$offset]]);
+        }
+    }
+
+    protected function findIdsStringFromOrderByIndex($property,$sort,$limit,$offset) {
+
+        if(strtoupper($sort)=="DESC"){
+            $ids =  $this->getRedisClient(true)->zrevrangebylex($this->storageKeyBuilder->generateKeyOrderBy($property), '+','-', ['LIMIT'=>['COUNT'=>$limit, 'OFFSET'=>$offset]]);
+        }else{
+            $ids =  $this->getRedisClient(true)->zrangebylex($this->storageKeyBuilder->generateKeyOrderBy($property),'-', '+', ['LIMIT'=>['COUNT'=>$limit, 'OFFSET'=>$offset]]);
+        }
+        foreach($ids as &$id) {
+            $id = $this->getIdStringFromOrderByIndexValue($id);
+        }
+
+        return $ids;
+    }
+
+    public function findAll($sort="ASC", $limit=-1, $offset=0, $orderBy=null)
     {
         $entities = [];
-        foreach($this->getRedisClient(true)->lrange($this->storageKeyBuilder->generateKeyIds(), $offset, ($offset+$limit)) as $idString){
+        if($orderBy===null){
+            $idsString = $this->findIdsStringFromIdOrder($sort,$limit,$offset);
+        } else if(in_array($orderBy, $this->entityMetadata->getOrderByProperties())){
+            $idsString = $this->findIdsStringFromOrderByIndex($orderBy, $sort,$limit,$offset);
+        }else if(in_array($orderBy, $this->entityMetadata->getDatesProperties())){
+            $idsString = $this->findIdsStringFromDateIndex($orderBy, $sort,$limit,$offset);
+        }else {
+            throw new InvalidArgumentException("'$orderBy' order by index not found");
+        }
+
+        foreach($idsString as $idString){
             $entities[] = $this->findByIdString($idString);
         }
 
@@ -152,7 +187,7 @@ class StorageRepository implements StorageRepositoryInterface
             }
             return count( $this->getRedisClient(true)->sinter($indexesKeys) );
         } else {
-            return $this->getRedisClient(true)->llen($this->storageKeyBuilder->generateKeyIds());
+            return $this->getRedisClient(true)->zcount($this->storageKeyBuilder->generateKeyIds(), '-inf', '+inf');
         }
     }
 
@@ -168,25 +203,6 @@ class StorageRepository implements StorageRepositoryInterface
         }
 
         return implode(':', $ids);
-    }
-
-    /**
-     * @param $entity
-     * @return string
-     * @throws InvalidArgumentException
-     */
-    public function buildIdStringFromEntity($entity){
-        $ids = [];
-        $idsProperties = $this->entityMetadata->getIdsProperties();
-        foreach($idsProperties as $idProperty) {
-            $id = $this->getterCaller->call($entity, $idProperty);
-            if(is_null($id)) {
-                throw new InvalidArgumentException("$idProperty property is tagged as ID, it cannot be null");
-            }
-            $ids[$idProperty] = $id;
-        }
-
-        return $this->buildIdStringFromIdsPropertiesArray($ids);
     }
 
     public function testEntityType($entity) {
@@ -232,42 +248,19 @@ class StorageRepository implements StorageRepositoryInterface
                 }
             }
         }
-        $idString = $this->buildIdStringFromEntity($entity);
-        //list of all ids
-        $this->getRedisClient()->rpush($this->storageKeyBuilder->generateKeyIds(), [$idString]);
+        $idString = $this->getIdString($entity);
+        //sorted list of all ids
+        $this->getRedisClient()->zadd($this->storageKeyBuilder->generateKeyIds(), [$idString=>(int)$idString]);
         //set entity data
-        $this->getRedisClient()->hmset(
+        $this->getRedisClient()->set(
             $this->storageKeyBuilder->generateKeyData($idString),
-            $this->entityManager->getSerializer()->toArray($entity)
+            serialize($entity)
         );
         $this->createSearchIndexes($entity);
         $this->createOrderbyIndexes($entity);
         $this->createDateIndexes($entity);
 
         return $entity;
-    }
-
-    public function update($entity)
-    {
-        //todo check if exist before
-        $this->getRedisClient()->multi();
-        //update data
-        $this->getRedisClient()->hmset(
-            $this->generateKeyData($entity->getId()),
-            $this->entityManager->getSerializer()->toArray($entity)
-        );
-        $this->removeIndexes($entity);
-        $this->createSearchIndexes($entity);
-        $this->getRedisClient()->exec();
-    }
-
-    /**
-     * @param Object $entity
-     */
-    public function removeIndexes($entity) {
-        foreach($this->entityMetadata->getIndexesProperties() as $index) {
-            $this->getRedisClient()->srem($this->storageKeyBuilder->generateKeyIndex($entity, $index), $entity->getId());
-        }
     }
 
     /**
@@ -277,7 +270,7 @@ class StorageRepository implements StorageRepositoryInterface
     public function createSearchIndexes($entity) {
 
         foreach($this->entityMetadata->getIndexesProperties() as $index) {
-            $this->getRedisClient()->sadd($this->storageKeyBuilder->generateKeyIndex($entity, $index), [$this->buildIdStringFromEntity($entity)]);
+            $this->getRedisClient()->sadd($this->storageKeyBuilder->generateKeyIndex($entity, $index), [$this->getIdString($entity)]);
         }
     }
 
@@ -285,11 +278,20 @@ class StorageRepository implements StorageRepositoryInterface
         return $value . self::ORDER_BY_VALUE_ID_SEPTARATOR . $idString;
     }
 
+    public function getIdStringFromOrderByIndexValue($indexValue) {
+        $tmp = explode(self::ORDER_BY_VALUE_ID_SEPTARATOR, $indexValue);
+        if(count($tmp) != 2) {
+            throw new InvalidArgumentException('not valid index value');
+        }
+
+        return $tmp[(count($tmp)-1)];
+    }
+
     public function createOrderbyIndexes($entity)
     {
         foreach($this->entityMetadata->getOrderByProperties() as $property) {
             $value = $this->getterCaller->call($entity, $property);
-            $this->getRedisClient()->zadd($this->storageKeyBuilder->generateKeyOrderBy($property), [$this->buildOrderByIndexValue($value, $this->buildIdStringFromEntity($entity)) => 0]);
+            $this->getRedisClient()->zadd($this->storageKeyBuilder->generateKeyOrderBy($property), [$this->buildOrderByIndexValue($value, $this->getIdString($entity)) => 0]);
         }
     }
 
@@ -298,45 +300,154 @@ class StorageRepository implements StorageRepositoryInterface
         foreach($this->entityMetadata->getDatesProperties() as $property) {
             $date = $this->getterCaller->call($entity, $property);
             if($date instanceof \DateTimeInterface) {
-                $this->getRedisClient()->zadd($this->storageKeyBuilder->generateKeyDateIndex($property), [$this->buildIdStringFromEntity($entity) => $date->getTimestamp()]);
+                $this->getRedisClient()->zadd($this->storageKeyBuilder->generateKeyDateIndex($property), [$this->getIdString($entity) => $date->getTimestamp()]);
             } else {
-               throw new InvalidMetadataAnnotationException("property $property of class " . get_class($entity) . " must be a implementation of DateTimeInterface");
+               throw new InvalidMetadataAnnotationException("property $property of class " . get_class($entity) . " must be an implementation of DateTimeInterface");
             }
         }
     }
 
+    public function removeIndexes($entity)
+    {
+        foreach($this->entityMetadata->getIndexesProperties() as $index) {
+            $this->getRedisClient()->srem($this->storageKeyBuilder->generateKeyIndex($entity, $index),  $this->getIdString($entity));
+        }
+    }
+
+    public function removeOrderByIndexes($entity)
+    {
+        foreach($this->entityMetadata->getOrderByProperties() as $property) {
+            $value = $this->getterCaller->call($entity, $property);
+            $this->getRedisClient()->zrem($this->storageKeyBuilder->generateKeyOrderBy($property), $this->buildOrderByIndexValue($value, $this->getIdString($entity)));
+        }
+    }
+
+    public function removeDateIndexes($entity)
+    {
+        foreach($this->entityMetadata->getDatesProperties() as $property) {
+            $this->getRedisClient()->zrem($this->storageKeyBuilder->generateKeyDateIndex($property), $this->getIdString($entity));
+        }
+    }
+
+
+    public function getIdString($mixedId)
+    {
+        $class = $this->entityMetadata->getEntityClass();
+        if(is_array($mixedId)) {
+            ksort($mixedId);
+            $ids = [];
+            foreach($mixedId as $idProperty => $idValue) {
+                if(in_array($idProperty, $this->entityMetadata->getIdsProperties())) {
+                    $ids[] =  $idValue;
+                } else {
+                    throw new InvalidArgumentException("$class: Invalid ID property: $idProperty");
+                }
+            }
+            return implode(":", $ids);
+
+        } else if($mixedId instanceof $class) {
+            $ids = [];
+            $idsProperties = $this->entityMetadata->getIdsProperties();
+            sort($idsProperties);
+            foreach($idsProperties as $idProperty) {
+                $id = $this->getterCaller->call($mixedId, $idProperty);
+                if(is_null($id)) {
+                    throw new InvalidArgumentException("$idProperty property is tagged as ID, it cannot be null");
+                }
+                $ids[] = $id;
+            }
+            return implode(":", $ids);
+
+        } else if(is_object($mixedId)){
+            throw new InvalidArgumentException('The "Id" parameter must be valid (direct ID value OR an array of Ids if multiple IDs entity OR the entity to delete)');
+        } else {
+            return $mixedId;
+        }
+    }
+
     /**
-     * @param int $id
-     * @return bool
+     * @param mixed $id
+     * @return bool true if entity found and removed, false if entity not found
      * @throws \Exception
      *
      */
     public function remove($id)
     {
-        if(!$this->getRedisClient(true)->exists($this->generateKeyData($id)))
-        {
+        $entity = $this->find($id);
+        if(is_null($entity)) {
             return false;
         }
-        $entity = $this->find($id);
-        $this->getRedisClient()->multi();
-
-        //remove id in Ids list
-        $this->getRedisClient()->lrem($this->generateKeyIds(), 0, $id);
+        $idString = $this->getIdString($entity);
+        //remove id in Ids sorted list
+        $this->getRedisClient()->zrem($this->storageKeyBuilder->generateKeyIds(),$idString);
         //remove entity data
-        $this->getRedisClient()->del($this->generateKeyData($id));
-        //remove id in indexes
-        foreach($this->entityIndexes as $index) {
-            $keyIndex = $this->generateKeyIndex($entity, $index);
-            $this->getRedisClient()->srem($keyIndex, $id);
-            //remove index key if useless
-            if($this->getRedisClient()->scard($keyIndex) === 0) {
-                $this->getRedisClient()->del($keyIndex);
-            }
-        }
+        $this->getRedisClient()->del($this->storageKeyBuilder->generateKeyData($idString));
+        //remove indexes
+        $this->removeIndexes($entity);
+        $this->removeOrderByIndexes($entity);
+        $this->removeDateIndexes($entity);
         unset($entity);
-        $this->getRedisClient()->exec();
 
         return true;
+    }
+
+
+    public function update($entity)
+    {
+        $this->testEntityType($entity);
+        $idString = $this->getIdString($entity);
+        $oldEntity = $this->find($entity);
+
+        //set entity data
+        $this->getRedisClient()->set(
+            $this->storageKeyBuilder->generateKeyData($idString),
+            serialize($entity)
+        );
+
+        $this->updateSearchIndexes($oldEntity, $entity);
+        $this->updateOrderByIndexes($oldEntity, $entity);
+        $this->updateDateIndexes($oldEntity, $entity);
+    }
+
+    public function updateSearchIndexes($oldEntity, $newEntity)
+    {
+        foreach($this->entityMetadata->getIndexesProperties() as $index) {
+            $oldIndexValue = $this->getterCaller->call($oldEntity, $index);
+            $newIndexValue = $this->getterCaller->call($newEntity, $index);
+            //rebuild index only if needed
+            if($oldIndexValue != $newIndexValue) {
+                $this->getRedisClient()->srem($this->storageKeyBuilder->generateKeyIndex($oldEntity, $index),  $this->getIdString($oldEntity));
+                $this->getRedisClient()->sadd($this->storageKeyBuilder->generateKeyIndex($newEntity, $index), [$this->getIdString($newEntity)]);
+            }
+        }
+    }
+
+    public function updateOrderByIndexes($oldEntity, $newEntity)
+    {
+        foreach($this->entityMetadata->getOrderByProperties() as $property) {
+            $oldValue = $this->getterCaller->call($oldEntity, $property);
+            $newValue = $this->getterCaller->call($newEntity, $property);
+            if($oldValue != $newValue) {
+                $this->getRedisClient()->zrem($this->storageKeyBuilder->generateKeyOrderBy($property), $this->buildOrderByIndexValue($oldValue, $this->getIdString($oldEntity)));
+                $this->getRedisClient()->zadd($this->storageKeyBuilder->generateKeyOrderBy($property), [$this->buildOrderByIndexValue($newValue, $this->getIdString($newEntity)) => 0]);
+            }
+        }
+    }
+
+    public function updateDateIndexes($oldEntity, $newEntity)
+    {
+        foreach($this->entityMetadata->getDatesProperties() as $property) {
+            $oldDate = $this->getterCaller->call($oldEntity, $property);
+            $newDate = $this->getterCaller->call($newEntity, $property);
+            if($newDate instanceof \DateTimeInterface) {
+                if($newDate->getTimestamp() != $oldDate->getTimestamp()) {
+                    $this->getRedisClient()->zrem($this->storageKeyBuilder->generateKeyDateIndex($property), $this->getIdString($oldEntity));
+                    $this->getRedisClient()->zadd($this->storageKeyBuilder->generateKeyDateIndex($property), [$this->getIdString($newEntity) => $newDate->getTimestamp()]);
+                }
+            } else {
+                throw new InvalidMetadataAnnotationException("property $property of class " . get_class($newEntity) . " must be an implementation of DateTimeInterface");
+            }
+        }
     }
 
     /**
@@ -347,14 +458,10 @@ class StorageRepository implements StorageRepositoryInterface
      */
     public function getNextFreeId()
     {
-        if($this->entityManager->isPipelineInitialized()) {
-            throw new RedisORMException('You cannot get next free id while pipeline context is activated');
-        }
-
         $continue = true;
         while($continue) {
             $id = $this
-                ->getRedisClient()
+                ->getRedisClient(true)
                 ->incr($this->storageKeyBuilder->generateKeyPrimaryIncr());
 
             if(!$this->getRedisClient(true)->exists($this->storageKeyBuilder->generateKeyData($id))) {

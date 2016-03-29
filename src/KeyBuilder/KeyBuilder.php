@@ -6,7 +6,7 @@ namespace Sportnco\RedisORM\KeyBuilder;
 use Sportnco\RedisORM\Metadata\EntityMetadata;
 use Sportnco\RedisORM\MethodCaller\GetterCaller;
 
-abstract class KeyBuilder
+class KeyBuilder
 {
     /**
      * @var GetterCaller
@@ -46,10 +46,12 @@ abstract class KeyBuilder
 
     /**
      * @param EntityMetadata $entityMetadata
+     * @return KeyBuilder $this
      */
     public function setEntityMetadata(EntityMetadata $entityMetadata)
     {
         $this->entityMetadata = $entityMetadata;
+        return $this;
     }
 
     /**
@@ -62,9 +64,11 @@ abstract class KeyBuilder
 
     /**
      * @param string $prefix
+     *  @return KeyBuilder $this
      */
     public function setPrefix($prefix)
     {
         $this->prefix = $prefix;
+        return $this;
     }
 }

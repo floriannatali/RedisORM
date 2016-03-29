@@ -28,7 +28,7 @@ class StorageKeyBuilder extends KeyBuilder
     }
 
     /**
-     * @param $id
+     * @param $idString
      * @return string
      */
     public function generateKeyData($idString)

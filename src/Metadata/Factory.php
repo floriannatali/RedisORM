@@ -10,7 +10,6 @@ namespace Sportnco\RedisORM\Metadata;
 
 
 use Doctrine\Common\Annotations\AnnotationReader;
-use JMS\Serializer\Annotation\Type;
 use Sportnco\RedisORM\Annotation\Date;
 use Sportnco\RedisORM\Annotation\Entity;
 use Sportnco\RedisORM\Annotation\ID;
@@ -77,20 +76,10 @@ class Factory
     private function parsePropertiesAnnotations(EntityMetadata $entityMetadata, \ReflectionClass $reflectionObj)
     {
         foreach($reflectionObj->getProperties() as $property) {
-            $jmsTypeSet = false;
-
             foreach($this->annotationReader->getPropertyAnnotations($property) as $annotation) {
                 if(is_subclass_of($annotation, RedisORM::class)){
                     $this->setAnnotationProperty($entityMetadata, $annotation, $property->getName());
                 }
-
-                if($annotation instanceof Type){
-                    $jmsTypeSet = true;
-                }
-            }
-
-            if(!$jmsTypeSet) {
-                throw new \InvalidArgumentException(Sport::class . ': JMS type is missing for serialization for property: '. $property->getName());
             }
         }
     }
