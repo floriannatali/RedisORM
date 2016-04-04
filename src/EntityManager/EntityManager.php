@@ -66,14 +66,14 @@ class EntityManager implements EntityManagerInterface
     */
 
     /**
-     * @param string $entityName
+     * @param string $entityClass
      * @return \Sportnco\RedisORM\Repository\StorageRepository
      */
-    public function getStorageRepository($entityName)
+    public function getStorageRepository($entityClass)
     {
         return $this
             ->repositoryFactory
-            ->getStorageRepository($this, $this->metadataFactory->getEntityMetadata($entityName));
+            ->getStorageRepository($this, $this->metadataFactory->getEntityMetadata(new \ReflectionClass($entityClass)));
     }
 
     /**
@@ -106,6 +106,10 @@ class EntityManager implements EntityManagerInterface
     }
 
     public function execPipeline() {
+        if(is_null($this->redisPipeline)) {
+            throw new RedisORMException('You must init pipeline before');
+        }
+
         $report = $this->redisPipeline->execute();
         $this->redisPipeline = null;
 

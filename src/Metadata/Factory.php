@@ -16,6 +16,7 @@ use Sportnco\RedisORM\Annotation\ID;
 use Sportnco\RedisORM\Annotation\Index;
 use Sportnco\RedisORM\Annotation\Order;
 use Sportnco\RedisORM\Annotation\RedisORM;
+use Sportnco\RedisORM\Exception\InvalidArgumentException;
 
 class Factory
 {
@@ -40,16 +41,17 @@ class Factory
     }
 
     /**
-     * @param string $entityClass
+     * @param \ReflectionClass $reflectionClass
      * @return EntityMetadata
      */
-    public function getEntityMetadata($entityClass){
-        $entityMetadata = new EntityMetadata();
-        $reflectionObj = new \ReflectionClass($entityClass);
-        $entityMetadata->setEntityClass($entityClass);
+    public function getEntityMetadata(\ReflectionClass $reflectionClass){
 
-        $this->parseClassAnnotations($entityMetadata, $reflectionObj);
-        $this->parsePropertiesAnnotations($entityMetadata, $reflectionObj);
+        $entityMetadata = new EntityMetadata();
+
+        $entityMetadata->setEntityClass($reflectionClass->getName());
+
+        $this->parseClassAnnotations($entityMetadata, $reflectionClass);
+        $this->parsePropertiesAnnotations($entityMetadata, $reflectionClass);
 
         if(count($entityMetadata->getIdsProperties()) > 1) {
             $entityMetadata->setIdType($entityMetadata::ID_TYPE_MULTIPLE);

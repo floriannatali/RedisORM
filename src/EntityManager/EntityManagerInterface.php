@@ -9,10 +9,10 @@ use Sportnco\RedisORM\Repository\StorageRepositoryInterface;
 interface EntityManagerInterface
 {
     /**
-     * @param string $entityName
+     * @param string $entityClass
      * @return StorageRepositoryInterface
      */
-    public function getStorageRepository($entityName);
+    public function getStorageRepository($entityClass);
 
     /**
      * @return Client

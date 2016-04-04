@@ -195,22 +195,6 @@ class EntityMetadata
     }
 
     /**
-     * @param $entity
-     * @return string
-     * @throws InvalidArgumentException
-     */
-    protected function buildIdString($entity){
-        $ids = [];
-        $idsProperties = $this->entityMetadata->getIdsProperties();
-        asort($idsProperties);
-        foreach($idsProperties as $idProperty) {
-            $ids[] = $idProperty . ':' . $this->getterCaller->call($entity, $idProperty);
-        }
-
-        return implode(':', $ids);
-    }
-
-    /**
      * @return string
      */
     public function getIdType()
@@ -231,7 +215,7 @@ class EntityMetadata
      * @throws InvalidMetadataAnnotationException
      */
     public function getIdProperty() {
-        if($this->idType == self::ID_TYPE_SINGLE && count($this->idsProperties) > 0) {
+        if($this->idType == self::ID_TYPE_SINGLE && count($this->idsProperties) == 1) {
             return $this->idsProperties[0];
         }
 
